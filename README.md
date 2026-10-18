@@ -47,6 +47,19 @@ Browser (Vercel)  ──HTTPS/JSON──▶  FastAPI (Render)  ──▶  XGBoos
 - Win probabilities are estimated per driver, so they do not sum to 100% across the grid. The head-to-head bar normalises the two drivers' values for display only.
 - In the season projection, the title chance comes from the simulated finishing orders, which depend heavily on the same qualifying-driven model.
 
+## Results
+
+Held-out evaluation: the same pipeline trained on 2019-2024 and tested on the full 2025 season (24 races), so no test race was seen in training.
+
+| Metric | Value |
+|---|---|
+| Race-level top-1 hit rate (highest-probability driver won) | 50.0% (12 of 24) |
+| Pole-sitter baseline | 66.7% (16 of 24) |
+| ROC-AUC (all driver entries) | 0.958 |
+| Log loss | 0.136 |
+
+The model separates likely winners from the rest of the field, but on single-race winner picks it does not beat simply choosing the pole sitter. With 24 test races the hit rates are noisy (one race is about 4 percentage points). Win probabilities are per-driver and not normalised across the grid; they sum to about 1.45 on average. The main value of the app is the probability estimates and the SHAP explanations, not out-guessing qualifying.
+
 ## Run locally
 
 ```bash
