@@ -7,8 +7,6 @@ Predict who wins a Formula 1 race from qualifying, weather and championship stan
 
 > The API runs on a free Render instance, so the first request after a quiet period can take up to a minute while it wakes up.
 
-[App screenshot](Screenshot 2026-10-06 115513.png)
-
 ## What it does
 
 - **Prediction:** win probability for one driver, shown on a team-coloured driver card with an animated count-up, plus a SHAP chart showing which inputs pushed the prediction up or down.
