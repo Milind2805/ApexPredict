@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,700;1,700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<title>F1 Race Winner Predictor</title>
+<style>
+:root{--paper:#0b0b0f;--track:#2a2a35;--win:#f5b800;--text:#f2f2f5;--header:#e10600;--card:#15151c;--ink:#e10600;--mut:#8b8b99;--line:#2a2a35;--flag:#827e7e;--pos:#2ee59d;--neg:#ff4d4d;--blue:#1f5fbf}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--text);font:15px/1.5 "Titillium Web","Segoe UI",system-ui,sans-serif;color-scheme:dark}
+header{background:linear-gradient(180deg,#e10600,#8f0300);color:#fff;border-bottom:6px solid #000}
+.wrap{max-width:1020px;margin:auto;padding:0 20px}
+header .wrap{padding-top:26px;padding-bottom:18px}
+h1{margin:0;font-size:1.6rem;font-family:'Orbitron',sans-serif;display:flex;align-items:center;gap:12px;font-weight:700;letter-spacing:-.01em}
+h2{margin:0 0 12px;font-size:1.05rem;color:var(--text);font-family:'Orbitron',sans-serif;}
+.sub{color:var(--mut);margin:4px 0 0}header .sub{color:#aab1bf}
+nav{display:flex;gap:4px;flex-wrap:wrap;margin-top:18px}
+nav button{background:transparent;color:#c9cfdb;border:0;padding:10px 14px;font:inherit;border-radius:8px 8px 0 0;cursor:pointer}
+nav button.on{background:var(--paper);color:var(--text);font-weight:700}
+nav button:focus-visible,.go:focus-visible{outline:3px solid var(--flag);outline-offset:2px}
+main{padding:20px 20px 60px;max-width:1020px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.card:has(.big){border-left:4px solid var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+label{display:block;font-size:.8rem;color:var(--mut);margin-bottom:3px}
+select,input[type=number]{width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:#0b0b0f;color:var(--text);font:inherit}
+select:focus,input[type=number]:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(225,6,0,.25)}
+input[type=checkbox]{accent-color:var(--ink)}
+option{background:#15151c;color:#f2f2f5}
+.chk{display:flex;gap:8px;align-items:center;color:var(--text);font-size:.95rem;}
+.go{margin-top:16px;background:var(--ink);color:var(--text);border:2px solid var(--ink);padding:10px 20px;border-radius:8px;font:inherit;font-weight:700;cursor:pointer}
+.go:disabled{opacity:.6;cursor:wait}
+.go:hover:not(:disabled){filter:brightness(1.15);transform:translateY(-1px)}
+.big{font-size:3.6rem;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;font-family:'Orbitron',sans-serif;color:var(--text);text-shadow:0 0 28px rgba(225,6,0,.55)}
+.ok{color:var(--pos)}.err{color:var(--neg);margin:0}
+.bar{display:flex;align-items:center;gap:10px;margin:6px 0}
+.bar .l{width:124px;font-weight:600}
+.bar .t{flex:1;background:var(--track);border-radius:4px;height:20px;overflow:hidden}
+.bar .f{height:100%;background:var(--ink);transform-origin:left;animation:grow .9s ease-out both}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.bar .v{width:70px;text-align:right;font-variant-numeric:tabular-nums}
+.tower{margin:6px 0}
+.card.dcard{border-left:4px solid var(--team);background:linear-gradient(100deg,color-mix(in srgb,var(--team) 16%,var(--card)),var(--card) 60%)}
+.dhead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.dcode{font-family:'Orbitron',sans-serif;font-size:2rem;letter-spacing:2px;color:var(--team)}
+.dteam{color:var(--mut)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px}
+.chips span{border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:.85rem;background:#0b0b0f}
+.h2h{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.h2h .card{margin-bottom:0}
+.dpct{font-family:'Orbitron',sans-serif;font-size:2.4rem;line-height:1.1}
+.dcard.fav{box-shadow:0 0 28px color-mix(in srgb,var(--team) 40%,transparent)}
+.tug{display:flex;height:16px;border-radius:8px;overflow:hidden;margin:14px 0 8px;background:var(--tb)}
+.tug i{display:block;height:100%;background:var(--ta);animation:tugin .9s ease-out}
+.tugl{display:flex;justify-content:space-between;font-weight:700}
+@keyframes tugin{from{width:50%}}
+.chartbox{position:relative;height:380px}
+.lamps{display:flex;gap:14px;justify-content:center;margin:8px 0 14px}
+.lamps i{width:34px;height:34px;border-radius:50%;background:var(--track);border:2px solid #000;animation:lamp .25s ease-out forwards;animation-delay:calc(var(--i)*.7s)}
+@keyframes lamp{to{background:var(--ink);box-shadow:0 0 18px 4px rgba(225,6,0,.7)}}
+.lights .sub{text-align:center;margin:0}
+.trow{display:grid;grid-template-columns:34px 5px 52px 1fr 1.6fr 64px;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line);animation:slide .45s ease-out both;animation-delay:var(--d)}
+.tpos{font-family:'Orbitron',sans-serif;color:var(--mut);text-align:right}
+.tstripe{height:22px;border-radius:2px;background:var(--team)}
+.tcode{font-weight:700;letter-spacing:1px}
+.tteam{color:var(--mut);font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbar{height:8px;background:var(--track);border-radius:4px;overflow:hidden}
+.tbar i{display:block;height:100%;background:var(--team);transform-origin:left;animation:grow .9s ease-out both;animation-delay:var(--d)}
+.tpct{text-align:right;font-variant-numeric:tabular-nums}
+.trow.lead{background:rgba(245,184,0,.08);box-shadow:inset 3px 0 0 var(--win)}
+@keyframes slide{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.rows{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin:16px 0 0}
+.row{display:grid;grid-template-columns:40px 1fr 1fr;gap:8px;margin:5px 0;align-items:center}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:nth-child(2),td:nth-child(2){text-align:left}
+th{font-size:.8rem;color:var(--mut);font-weight:600}
+@media(max-width:720px){.cols,.h2h{grid-template-columns:1fr}.rows{grid-template-columns:1fr}.big{font-size:2.8rem}.bar .l{width:96px}.trow{grid-template-columns:28px 5px 44px 1fr 56px}.tteam{display:none}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1><svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="3" width="28" height="20" fill="#fff"/><g fill="#0b0b0f"><rect x="2" y="3" width="7" height="5"/><rect x="16" y="3" width="7" height="5"/><rect x="9" y="8" width="7" height="5"/><rect x="23" y="8" width="7" height="5"/><rect x="2" y="13" width="7" height="5"/><rect x="16" y="13" width="7" height="5"/><rect x="9" y="18" width="7" height="5"/><rect x="23" y="18" width="7" height="5"/></g><rect x="0" y="3" width="2" height="27" fill="#fff"/></svg> F1 Race Winner Predictor</h1>
+  <p class="sub">Gradient-boosted model trained on 2019–2025 race weekends, served by a FastAPI backend.</p>
+  <nav id="nav">
+    <button data-t="predict" class="on">Prediction</button>
+    <button data-t="h2h">Head-to-head</button>
+    <button data-t="sim">Race simulator</button>
+    <button data-t="proj">Season projection</button>
+  </nav>
+</div></header>
+<main>
+  <p id="status" class="sub">Connecting to the server…</p>
+  <section id="predict"></section>
+  <section id="h2h" hidden></section>
+  <section id="sim" hidden></section>
+  <section id="proj" hidden></section>
+  <p class="sub">Predictions are statistical estimates from historical data, not guarantees.</p>
+</main>
+<script>
+const API = "https://f1-race-winner-predictor-app.onrender.com"; 
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct = x => (x * 100).toFixed(1) + "%";
+let META, GRID = [];
+
+async function api(path, body) {
+  const r = await fetch(API + path, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : undefined);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Request failed (" + r.status + ")");
+  return j;
+}
+const opt = (a, sel) => (sel && !a.includes(sel) ? [sel, ...a] : a)
+  .map(x => `<option${x === sel ? " selected" : ""}>${esc(x)}</option>`).join("");
+const bars = (items, max) => {
+  max = max || Math.max(...items.map(i => Math.abs(i.v)), 1e-9);
+  return items.map(i => `<div class="bar"><span class="l">${esc(i.l)}</span><div class="t"><div class="f" style="width:${Math.max(1, Math.abs(i.v) / max * 100)}%;${i.c ? "background:" + i.c : ""}"></div></div><span class="v">${i.t}</span></div>`).join("");
+};
+const entry = (id, d = {}) => `<div class="grid">
+<div><label>Driver</label><select id="${id}-driver">${opt(META.drivers, d.driver || "VER")}</select></div>
+<div><label>Team</label><select id="${id}-team">${opt(META.teams, d.team || "Red Bull Racing")}</select></div>
+<div><label>Grid position</label><input id="${id}-grid" type="number" min="1" max="22" value="${d.grid || 1}"></div>
+<div><label>Qualifying position</label><input id="${id}-quali" type="number" min="1" max="22" value="${d.grid || 1}"></div>
+<div><label>Championship points</label><input id="${id}-pts" type="number" min="0" value="${d.pts ?? 100}"></div>
+<div><label>&nbsp;</label><label class="chk"><input id="${id}-home" type="checkbox"> Home race</label></div></div>`;
+const cond = id => `<div class="grid">
+<div><label>Circuit</label><select id="${id}-circuit">${opt(META.circuits)}</select></div>
+<div><label>Air temperature (°C)</label><input id="${id}-air" type="number" value="25"></div>
+<div><label>Track temperature (°C)</label><input id="${id}-track" type="number" value="35"></div>
+<div><label>&nbsp;</label><label class="chk"><input id="${id}-rain" type="checkbox"> Wet race</label></div></div>`;
+const getE = id => ({driver:$(`#${id}-driver`).value, team:$(`#${id}-team`).value, grid_position:+$(`#${id}-grid`).value, quali_position:+$(`#${id}-quali`).value, standing_points:+$(`#${id}-pts`).value, home_race:$(`#${id}-home`).checked});
+const getC = id => ({circuit:$(`#${id}-circuit`).value, rainfall:$(`#${id}-rain`).checked, air_temp:+$(`#${id}-air`).value, track_temp:+$(`#${id}-track`).value});
+const LIGHTS = `<div class="card lights"><div class="lamps"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i></div><p class="sub">Warming up the engine… the first request can take up to a minute.</p></div>`;
+
+let PROJ = [], projChart;
+function drawProj(){
+  const cv = document.getElementById("projchart");
+  if (!cv || !window.Chart || !PROJ.length) return;
+  if (projChart) projChart.destroy();
+  Chart.defaults.color = "#8b8b99";
+  Chart.defaults.font.family = "'Titillium Web', sans-serif";
+  projChart = new Chart(cv, {
+    type: "bar",
+    data: {
+      labels: PROJ.map(s => s.driver),
+      datasets: [
+        {label:"10th–90th percentile", data:PROJ.map(s => [s.p10, s.p90]), backgroundColor:"rgba(225,6,0,.35)", borderColor:"#e10600", borderWidth:1, borderRadius:4, grouped:false, barThickness:20, order:2},
+        {label:"Projected points", data:PROJ.map(s => [s.projected_mean - 2, s.projected_mean + 2]), backgroundColor:"#f5b800", borderRadius:2, grouped:false, barThickness:20, order:1}
+      ]
+    },
+    options: {
+      indexAxis: "y", maintainAspectRatio: false, animation: {duration: 900},
+      scales: {x:{grid:{color:"#2a2a35"}}, y:{grid:{display:false}}},
+      plugins: {legend:{labels:{usePointStyle:true}}}
+    }
+  });
+}
+function countUp(el){
+  const m = el.textContent.match(/[\d.]+/); if(!m) return;
+  const end = parseFloat(m[0]), t0 = performance.now(), dur = 900;
+  const step = now => {
+    const p = Math.min((now - t0) / dur, 1);
+    el.textContent = (end * (1 - Math.pow(1 - p, 3))).toFixed(1) + "%";
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function afterRender(out){
+  drawProj();
+  const big = out.querySelector(".big");
+  if (!big) return;
+  countUp(big);
+  if (out.querySelector(".ok") && window.confetti)
+    confetti({particleCount:120, spread:70, origin:{y:.35}, colors:["#e10600","#f5b800","#ffffff"]});
+}
+const TEAM_COLORS = {"red bull":"#3671C6", ferrari:"#E8002D", mercedes:"#27F4D2", mclaren:"#FF8000", "aston martin":"#229971", alpine:"#FF87BC", williams:"#64C4FF", "racing bulls":"#6692FF", haas:"#B6BABD", audi:"#F50537", sauber:"#52E252", cadillac:"#C0C0C0"};
+const teamColor = t => TEAM_COLORS[Object.keys(TEAM_COLORS).find(k => (t || "").toLowerCase().includes(k))] || "#888";
+
+function tower(results) {
+  const rows = [...results].sort((a, b) => (b.win_probability || 0) - (a.win_probability || 0));
+  const max = Math.max(...rows.map(x => x.win_probability || 0), 0.01);
+  return `<div class="tower">` + rows.map((x, i) => `
+    <div class="trow ${i === 0 && x.supported ? "lead" : ""}" style="--team:${teamColor(x.team)};--d:${i * 40}ms">
+      <span class="tpos">${i + 1}</span><span class="tstripe"></span>
+      <span class="tcode">${esc(x.driver)}</span><span class="tteam">${esc(x.team)}</span>
+      <span class="tbar"><i style="width:${(x.win_probability || 0) / max * 100}%"></i></span>
+      <span class="tpct">${x.supported ? pct(x.win_probability) : "no data"}</span>
+    </div>`).join("") + `</div>`;
+}
+
+async function run(btn, out, fn) {
+  const t = btn.textContent;
+  btn.disabled = true; btn.textContent = "Running…"; out.innerHTML = LIGHTS;
+  
+  try { out.innerHTML = await fn(); afterRender(out); }
+  catch (e) { out.innerHTML = `<div class="card"><p class="err">${esc(e.message)}</p></div>`; }
+  btn.disabled = false; btn.textContent = t;
+}
+
+async function loadGrid() {
+  GRID = await api("/grid/" + $("#ss").value);
+  $("#gridrows").innerHTML = `<div class="rows">` + GRID.map((g, i) =>
+    `<div class="row"><b>P${g.position}</b><select id="sd${i}" aria-label="Driver P${g.position}">${opt(META.drivers, g.driver)}</select><select id="st${i}" aria-label="Team P${g.position}">${opt(META.teams, g.team)}</select></div>`).join("") + `</div>`;
+}
+
+function build() {
+  // Prediction + explanation
+  $("#predict").innerHTML = `<div class="card"><h2>Race settings</h2>${entry("p")}<div style="height:12px"></div>${cond("pc")}<button class="go" id="pgo">Predict winner</button></div><div id="pout"></div>`;
+  $("#pgo").onclick = e => run(e.target, $("#pout"), async () => {
+    const body = {...getE("p"), ...getC("pc")};
+    const r = await api("/explain", body);
+    const c = Object.entries(r.contributions).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+    const proxy = body.team === "Cadillac" ? `<p class="sub">Cadillac has no race history, so a midfield team stands in for it.</p>` : "";
+    return `<div class="card dcard" style="--team:${teamColor(body.team)}">
+  <div class="dhead"><span class="dcode">${esc(r.driver)}</span><span class="dteam">${esc(body.team)}</span></div>
+  <div class="chips"><span>Grid P${body.grid_position}</span><span>Quali P${body.quali_position}</span><span>${body.standing_points} pts</span>${body.rainfall ? "<span>Wet race</span>" : ""}${body.home_race ? "<span>Home race</span>" : ""}</div>
+  <div class="big">${pct(r.win_probability)}</div><p>${esc(r.driver)} is ${r.predicted_win ? "<b class='ok'>predicted to win</b>" : "<b>not predicted to win</b>"}.</p>${proxy}</div>
+    <div class="card"><h2>What drove this prediction</h2>${bars(c.map(([k, v]) => ({l:k, v, t:(v > 0 ? "+" : "") + v.toFixed(2), c:v > 0 ? "var(--pos)" : "var(--neg)"})))}<p class="sub">Green pushes toward a win, red pushes against (SHAP values).</p></div>`;
+  });
+
+  // Head-to-head
+  $("#h2h").innerHTML = `<div class="card"><div class="cols"><div><h2>Driver A</h2>${entry("a")}</div><div><h2>Driver B</h2>${entry("b", {driver:"NOR", team:"McLaren", grid:2})}</div></div><div style="height:12px"></div>${cond("hc")}<button class="go" id="hgo">Compare drivers</button></div><div id="hout"></div>`;
+  $("#hgo").onclick = e => run(e.target, $("#hout"), async () => {
+    const A = getE("a"), B = getE("b");
+    const r = await api("/compare", {...getC("hc"), a:A, b:B});
+    const pa = r.a.win_probability || 0, pb = r.b.win_probability || 0;
+    const share = pa + pb ? pa / (pa + pb) * 100 : 50;
+    const ca = teamColor(A.team), cb = teamColor(B.team) === ca ? "#ffffff" : teamColor(B.team);
+    const side = (x, y, c) => `
+    <div class="card dcard ${y.driver === r.favourite ? "fav" : ""}" style="--team:${c}">
+    <div class="dhead"><span class="dcode">${esc(y.driver)}</span><span class="dteam">${esc(x.team)}</span></div>
+    <div class="chips"><span>Grid P${x.grid_position}</span><span>Quali P${x.quali_position}</span><span>${x.standing_points} pts</span></div>
+    <div class="dpct">${pct(y.win_probability)}</div>
+    </div>`;
+    return `<div class="h2h">${side(A, r.a, ca)}${side(B, r.b, cb)}</div>
+    <div class="card" style="margin-top:14px"><h2>The model favours ${esc(r.favourite)}</h2>
+    <div class="tug" style="--ta:${ca};--tb:${cb}"><i style="width:${share}%"></i></div>
+    <div class="tugl"><span style="color:${ca}">${esc(r.a.driver)} ${share.toFixed(0)}%</span><span style="color:${cb}">${(100 - share).toFixed(0)}% ${esc(r.b.driver)}</span></div>
+    <p class="sub">The bar shows each driver's share of their combined win chance.</p>
+    </div>`;
+  });
+
+  // Race simulator
+  $("#sim").innerHTML = `<div class="card"><h2>Full-grid simulator</h2><div class="grid"><div><label>Starting grid</label><select id="ss"><option>2026</option><option>2023</option></select></div></div><div style="height:12px"></div>${cond("sc")}<div id="gridrows"></div><button class="go" id="sgo">Simulate race</button></div><div id="sout"></div>`;
+  $("#ss").onchange = loadGrid;
+  $("#sgo").onclick = e => run(e.target, $("#sout"), async () => {
+    const entries = GRID.map((g, i) => ({driver:$("#sd" + i).value, team:$("#st" + i).value, grid_position:g.position, quali_position:g.position, standing_points:g.points, home_race:false}));
+    const r = await api("/simulate", {...getC("sc"), entries});
+    const items = r.results.map((x, i) => ({l:x.driver, v:x.win_probability || 0, t:x.supported ? pct(x.win_probability) : "no data", c: i === 0 && x.supported ? "var(--win)" : ""}));
+    const prox = r.results.some(x => x.team === "Cadillac") ? `<p class="sub">Cadillac drivers use a midfield proxy because the team has no race history.</p>` : "";
+    return `<div class="card"><h2>Predicted winner: ${esc(r.predicted_winner || "none")}</h2>${tower(r.results)}<p class="sub">Each driver's win chance is estimated independently, so the values don't add up to 100%.</p>${prox}</div>`;
+  });
+
+  // Season projection
+  $("#proj").innerHTML = `<div class="card"><h2>2026 season projection</h2><p class="sub">Monte Carlo simulation of the remaining races. Ctrl/Cmd-click to select several.</p><div class="grid" style="margin-top:12px"><div style="grid-column:1/-1"><label>Remaining races</label><select id="pr" multiple size="8">${opt(META.circuits)}</select></div><div><label>Simulations</label><select id="pn"><option>500</option><option>1000</option><option>2000</option><option>3000</option></select></div></div><button class="go" id="prgo">Run projection</button></div><div id="prout"></div>`;
+  $("#prgo").onclick = e => run(e.target, $("#prout"), async () => {
+    const races = [...$("#pr").selectedOptions].map(o => o.value);
+    if (!races.length) throw new Error("Select at least one remaining race.");
+    const r = await api("/season-projection", {remaining_races:races, n_sims:+$("#pn").value});
+    PROJ = r.standings.slice(0, 10);
+    const top = r.standings.slice(0, 10).map(s => ({l:s.driver, v:s.projected_mean, t:s.projected_mean}));
+    return `<div class="card"><h2>Projected final points (top 10)</h2><div class="chartbox"><canvas id="projchart"></canvas></div><p class="sub">Gold = projected points. Red band = 10th to 90th percentile across simulations.</p></div>
+    <div class="card"><h2>Projected standings</h2><div class="scroll"><table><tr><th>#</th><th>Driver</th><th>Now</th><th>Projected</th><th>10th–90th pct</th><th>Title chance</th></tr>${r.standings.map((s, i) => `<tr><td>${i + 1}</td><td>${esc(s.driver)}</td><td>${s.current_points}</td><td>${s.projected_mean}</td><td>${s.p10}–${s.p90}</td><td>${s.title_win_pct}%</td></tr>`).join("")}</table></div>${r.skipped_races.length ? `<p class="sub">Skipped unknown races: ${esc(r.skipped_races.join(", "))}</p>` : ""}</div>`;
+  });
+}
+
+$("#nav").onclick = e => {
+  const t = e.target.dataset.t; if (!t) return;
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b === e.target));
+  document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== t);
+};
+
+(async function init() {
+  const st = $("#status");
+  for (let i = 0; i < 12 && !META; i++) {
+    try { META = await api("/meta"); }
+    catch (e) { st.textContent = "Waking the server. The free tier can take up to a minute."; await new Promise(r => setTimeout(r, 5000)); }
+  }
+  if (!META) { st.textContent = "Could not reach the API. Check the API address at the top of the script."; return; }
+  st.remove(); build(); await loadGrid();
+})();
+</script>
+</body>
+</html>
