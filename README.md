@@ -1,4 +1,4 @@
-# F1 Race Winner Predictor
+# ApexPredict
 
 Predict who wins a Formula 1 race from qualifying, weather and championship standings, then see *why* the model decided that, and how it would have done on a season it never saw.
 
