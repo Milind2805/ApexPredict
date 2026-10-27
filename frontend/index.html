@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,700;1,700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<title>F1 Race Winner Predictor</title>
+<meta name="description" content="Predict F1 race winners with an XGBoost model explained by SHAP. Includes head-to-head comparison, a full-grid race simulator and a Monte Carlo season projection.">
+<meta name="theme-color" content="#e10600">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0b0f'/%3E%3Cg fill='%23fff'%3E%3Crect x='4' y='4' width='6' height='6'/%3E%3Crect x='16' y='4' width='6' height='6'/%3E%3Crect x='10' y='10' width='6' height='6'/%3E%3Crect x='22' y='10' width='6' height='6'/%3E%3Crect x='4' y='16' width='6' height='6'/%3E%3Crect x='16' y='16' width='6' height='6'/%3E%3Crect x='10' y='22' width='6' height='6'/%3E%3Crect x='22' y='22' width='6' height='6'/%3E%3C/g%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="F1 Race Winner Predictor">
+<meta property="og:description" content="XGBoost win probabilities with SHAP explanations, a full-grid simulator and a Monte Carlo season projection.">
+<meta property="og:url" content="https://f1-race-winner-predictor-app-fronte.vercel.app/">
+<meta property="og:image" content="https://f1-race-winner-predictor-app-fronte.vercel.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{--paper:#0b0b0f;--track:#2a2a35;--win:#f5b800;--text:#f2f2f5;--header:#e10600;--card:#15151c;--ink:#e10600;--mut:#8b8b99;--line:#2a2a35;--flag:#827e7e;--pos:#2ee59d;--neg:#ff4d4d;--blue:#1f5fbf}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--text);font:15px/1.5 "Titillium Web","Segoe UI",system-ui,sans-serif;color-scheme:dark}
+header{background:linear-gradient(180deg,#e10600,#8f0300);color:#fff;border-bottom:6px solid #000}
+.wrap{max-width:1020px;margin:auto;padding:0 20px}
+header .wrap{padding-top:26px;padding-bottom:18px}
+header{position:relative;overflow:hidden}
+header .wrap{position:relative;z-index:1}
+header::before{content:"";position:absolute;inset:0 -300px;background:repeating-linear-gradient(90deg,transparent 0 58px,rgba(255,255,255,.07) 58px 60px,transparent 60px 120px);transform:skewX(-25deg);animation:speed 5s linear infinite;pointer-events:none}
+@keyframes speed{to{background-position:-120px 0}}
+header::after{content:"";position:absolute;top:0;bottom:0;width:140px;left:-200px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent);transform:skewX(-25deg);animation:sweep 7s ease-in-out 1s infinite;pointer-events:none}
+@keyframes sweep{to{left:110%}}
+h1{animation:reveal .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes reveal{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.stats{display:flex;gap:30px;flex-wrap:wrap;margin-top:16px}
+.stat{animation:rise .7s ease-out both}
+.stat:nth-child(2){animation-delay:.1s}.stat:nth-child(3){animation-delay:.2s}.stat:nth-child(4){animation-delay:.3s}
+.stat b{display:block;font-family:'Orbitron',sans-serif;font-size:1.5rem;line-height:1.1}
+.stat span{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;opacity:.8}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){header::before,header::after,h1,.stat,h1 svg,.card,main section,.grid>div,.go,body::after,.tile{animation:none}}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+.tile{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:auto 1fr;column-gap:10px;padding:10px 12px;border-radius:8px;border-left:4px solid var(--team);background:linear-gradient(100deg,color-mix(in srgb,var(--team) 14%,var(--card)),var(--card));animation:rise .5s ease-out backwards;animation-delay:var(--d);transition:transform .15s,box-shadow .15s}
+.tile:hover,.tile:focus-visible{transform:translateY(-3px);box-shadow:0 6px 22px color-mix(in srgb,var(--team) 35%,transparent)}
+.rivals{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.rv{all:unset;cursor:pointer;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:#0b0b0f;font-family:'Orbitron',sans-serif;font-size:.8rem;letter-spacing:1px;transition:transform .15s,box-shadow .15s,border-color .15s}
+.rv i{font-style:normal;color:var(--ink);margin:0 8px}
+.rv:hover,.rv:focus-visible{border-color:var(--ink);box-shadow:0 0 16px rgba(225,6,0,.35);transform:translateY(-2px)}
+.tp{grid-row:1/3;align-self:center;font-family:'Orbitron',sans-serif;color:var(--mut);font-size:.8rem}
+.tc{font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:1px}
+.tt{color:var(--mut);font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+h1{margin:0;font-size:1.6rem;font-family:'Orbitron',sans-serif;display:flex;align-items:center;gap:12px;font-weight:700;letter-spacing:-.01em}
+h2{margin:0 0 12px;font-size:1.05rem;color:var(--text);font-family:'Orbitron',sans-serif;}
+.sub{color:var(--mut);margin:4px 0 0}header .sub{color:#aab1bf}
+nav{display:flex;gap:4px;flex-wrap:wrap;margin-top:18px}
+nav button{background:transparent;color:#c9cfdb;border:0;padding:10px 14px;font:inherit;border-radius:8px 8px 0 0;cursor:pointer}
+nav button.on{background:var(--paper);color:var(--text);font-weight:700}
+nav button:focus-visible,.go:focus-visible{outline:3px solid var(--flag);outline-offset:2px}
+main{padding:20px 20px 60px;max-width:1020px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.card:has(.big){border-left:4px solid var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+label{display:block;font-size:.8rem;color:var(--mut);margin-bottom:3px}
+select,input[type=number]{width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:#0b0b0f;color:var(--text);font:inherit}
+select:focus,input[type=number]:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(225,6,0,.25)}
+input[type=checkbox]{accent-color:var(--ink)}
+option{background:#15151c;color:#f2f2f5}
+.chk{display:flex;gap:8px;align-items:center;color:var(--text);font-size:.95rem;}
+.go{margin-top:16px;background:var(--ink);color:var(--text);border:2px solid var(--ink);padding:10px 20px;border-radius:8px;font:inherit;font-weight:700;cursor:pointer}
+.go:disabled{opacity:.6;cursor:wait}
+.go:hover:not(:disabled){filter:brightness(1.15);transform:translateY(-1px)}
+.big{font-size:3.6rem;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;font-family:'Orbitron',sans-serif;color:var(--text);text-shadow:0 0 28px rgba(225,6,0,.55)}
+.ok{color:var(--pos)}.err{color:var(--neg);margin:0}
+.bar{display:flex;align-items:center;gap:10px;margin:6px 0}
+.bar .l{width:124px;font-weight:600}
+.bar .t{flex:1;background:var(--track);border-radius:4px;height:20px;overflow:hidden}
+.bar .f{height:100%;background:var(--ink);transform-origin:left;animation:grow .9s ease-out both}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.bar .v{width:70px;text-align:right;font-variant-numeric:tabular-nums}
+.tower{margin:6px 0}
+.card.dcard{border-left:4px solid var(--team);background:linear-gradient(100deg,color-mix(in srgb,var(--team) 16%,var(--card)),var(--card) 60%)}
+.dhead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.dcode{font-family:'Orbitron',sans-serif;font-size:2rem;letter-spacing:2px;color:var(--team)}
+.dteam{color:var(--mut)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px}
+.chips span{border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:.85rem;background:#0b0b0f}
+.h2h{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.h2h .card{margin-bottom:0}
+.dpct{font-family:'Orbitron',sans-serif;font-size:2.4rem;line-height:1.1}
+.dcard.fav{box-shadow:0 0 28px color-mix(in srgb,var(--team) 40%,transparent)}
+.dcard{position:relative}
+.gauge{position:absolute;right:22px;top:16px;width:210px;max-width:42%}
+.gauge .gbg,.gauge .gfg{fill:none;stroke-width:14;stroke-linecap:round}
+.gauge .gbg{stroke:var(--track)}
+.gauge .gfg{stroke:var(--team);stroke-dasharray:282.74;filter:drop-shadow(0 0 6px var(--team));animation:gaugein 1.3s cubic-bezier(.2,.7,.2,1) both}
+.gauge text{font-family:'Orbitron',sans-serif;font-size:10px;fill:var(--mut)}
+@keyframes gaugein{from{stroke-dashoffset:282.74}}
+.tug{display:flex;height:16px;border-radius:8px;overflow:hidden;margin:14px 0 8px;background:var(--tb)}
+.tug i{display:block;height:100%;background:var(--ta);animation:tugin .9s ease-out}
+.tugl{display:flex;justify-content:space-between;font-weight:700}
+@keyframes tugin{from{width:50%}}
+.chartbox{position:relative;height:380px}
+.chartbox.tall{height:560px}
+.lamps{display:flex;gap:14px;justify-content:center;margin:8px 0 14px}
+.lamps i{width:34px;height:34px;border-radius:50%;background:var(--track);border:2px solid #000;animation:lamp .25s ease-out forwards;animation-delay:calc(var(--i)*.7s)}
+@keyframes lamp{to{background:var(--ink);box-shadow:0 0 18px 4px rgba(225,6,0,.7)}}
+.lights .sub{text-align:center;margin:0}
+.lights{transition:opacity .45s ease .15s,transform .45s ease .15s}
+.lights.out{opacity:0;transform:scale(.97)}
+.lights.out .lamps i{animation:none;background:var(--track);box-shadow:none;transition:background .15s,box-shadow .15s}
+.trow{display:grid;grid-template-columns:34px 5px 52px 1fr 1.6fr 64px;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line);animation:slide .45s ease-out both;animation-delay:var(--d)}
+.tpos{font-family:'Orbitron',sans-serif;color:var(--mut);text-align:right}
+.tstripe{height:22px;border-radius:2px;background:var(--team)}
+.tcode{font-weight:700;letter-spacing:1px}
+.tteam{color:var(--mut);font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbar{height:8px;background:var(--track);border-radius:4px;overflow:hidden}
+.tbar i{display:block;height:100%;background:var(--team);transform-origin:left;animation:grow .9s ease-out both;animation-delay:var(--d)}
+.tpct{text-align:right;font-variant-numeric:tabular-nums}
+.trow.lead{background:rgba(245,184,0,.08);box-shadow:inset 3px 0 0 var(--win)}
+@keyframes slide{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.rows{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin:16px 0 0}
+.row{display:grid;grid-template-columns:40px 1fr 1fr;gap:8px;margin:5px 0;align-items:center}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:nth-child(2),td:nth-child(2){text-align:left}
+th{font-size:.8rem;color:var(--mut);font-weight:600}
+@media(max-width:720px){.cols,.wi{grid-template-columns:1fr}.h2h{grid-template-columns:1fr}.gauge{position:static;display:block;margin:0 auto 8px;max-width:220px}.rows{grid-template-columns:1fr}.big{font-size:2.8rem}.bar .l{width:96px}.trow{grid-template-columns:28px 5px 44px 1fr 56px}.tteam{display:none}}
+/* tabs fade in when you switch */
+main section:not([hidden]){animation:rise .45s ease-out backwards}
+
+/* form fields cascade in */
+.grid>div{animation:rise .5s ease-out backwards}
+.grid>div:nth-child(2){animation-delay:.06s}.grid>div:nth-child(3){animation-delay:.12s}
+.grid>div:nth-child(4){animation-delay:.18s}.grid>div:nth-child(5){animation-delay:.24s}
+.grid>div:nth-child(6){animation-delay:.3s}
+
+/* buttons: idle pulse + shine on hover */
+.go{position:relative;overflow:hidden}
+.go:not(:disabled){animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(225,6,0,.45)}50%{box-shadow:0 0 0 10px rgba(225,6,0,0)}}
+.go::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);transition:left .6s}
+.go:hover:not(:disabled)::after{left:130%}
+
+/* pit-lane streak across the top when the page opens */
+body::after{content:"";position:fixed;top:0;left:-35%;width:35%;height:3px;z-index:50;pointer-events:none;background:linear-gradient(90deg,transparent,#fff,#e10600);animation:streak 1.4s cubic-bezier(.6,0,.2,1) .2s both}
+@keyframes streak{to{left:105%}}
+
+/* smoother tilt */
+.dcard{transition:transform .12s ease-out,box-shadow .2s}
+
+.wi{display:grid;grid-template-columns:minmax(180px,260px) 1fr;gap:28px;align-items:center}
+.wig{text-align:center}
+.wig svg{width:100%;display:block}
+.wig .gbg,.wig .gfg{fill:none;stroke-width:14;stroke-linecap:round}
+.wig .gbg{stroke:var(--track)}
+.wig .gfg{stroke:var(--team);stroke-dasharray:282.74;stroke-dashoffset:282.74;filter:drop-shadow(0 0 6px var(--team));transition:stroke-dashoffset .5s ease,stroke .3s}
+.wig .dpct{margin-top:-8px;transition:opacity .2s}
+#whatif.busy .dpct{opacity:.55}
+.wrow{display:grid;grid-template-columns:140px 1fr 44px;gap:12px;align-items:center;margin:10px 0}
+.wrow label{margin:0}
+.wrow b{text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{accent-color:var(--ink);width:100%}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px}
+.mini{all:unset;cursor:pointer;padding:7px 16px;border-radius:999px;border:1px solid var(--line);background:#0b0b0f;font-weight:700;font-size:.85rem;transition:transform .15s,box-shadow .15s,border-color .15s}
+.mini:hover,.mini:focus-visible{border-color:var(--ink);box-shadow:0 0 14px rgba(225,6,0,.3);transform:translateY(-2px)}
+.rows.flash .row{animation:rise .4s ease-out backwards}
+
+.bt{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:12px 0 16px}
+.bt div{background:#0b0b0f;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.bt b{display:block;font-family:'Orbitron',sans-serif;font-size:1.6rem}
+.bt span{color:var(--mut);font-size:.8rem}
+.strip{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.strip i{width:18px;height:18px;border-radius:4px;background:var(--track)}
+.strip i.h{background:var(--pos)}
+
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1><svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="3" width="28" height="20" fill="#fff"/><g fill="#0b0b0f"><rect x="2" y="3" width="7" height="5"/><rect x="16" y="3" width="7" height="5"/><rect x="9" y="8" width="7" height="5"/><rect x="23" y="8" width="7" height="5"/><rect x="2" y="13" width="7" height="5"/><rect x="16" y="13" width="7" height="5"/><rect x="9" y="18" width="7" height="5"/><rect x="23" y="18" width="7" height="5"/></g><rect x="0" y="3" width="2" height="27" fill="#fff"/></svg> F1 Race Winner Predictor</h1>
+
+  <div class="stats">
+  <div class="stat"><b data-n="7">0</b><span>Seasons</span></div>
+  <div class="stat"><b data-n="3031">0</b><span>Race entries</span></div>
+  <div class="stat"><b data-n="10">0</b><span>Model features</span></div>
+  <div class="stat"><b data-n="5">0</b><span>Analysis tools</span></div>
+</div>
+  <nav id="nav">
+    <button data-t="predict" class="on">Prediction</button>
+    <button data-t="h2h">Head-to-head</button>
+    <button data-t="sim">Race simulator</button>
+    <button data-t="proj">Season projection</button>
+    <button data-t="back">Backtest</button>
+  </nav>
+</div></header>
+<main>
+  <div id="status" class="sub"></div>
+  <section id="predict"></section>
+  <section id="h2h" hidden></section>
+  <section id="sim" hidden></section>
+  <section id="proj" hidden></section>
+  <section id="back" hidden></section>
+  <p class="sub">Predictions are statistical estimates from historical data, not guarantees.</p>
+</main>
+<script>
+const API = "https://f1-race-winner-predictor-app.onrender.com"; 
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct = x => (x * 100).toFixed(1) + "%";
+let META, GRID = [];
+
+async function loadNextRace() {
+  const btn = $("#nextRaceBtn"), box = $("#nextRaceResult");
+  btn.disabled = true; btn.textContent = "Loading..."; box.style.display = "none";
+  try {
+    if (!CAL.length) CAL = (await jget("/current.json")).RaceTable.Races;
+    if (!GRIDP.length) GRIDP = await api("/grid/2026");
+    const today = new Date().toISOString().slice(0, 10);
+    const r = CAL.find(x => x.date >= today);
+    if (!r) throw new Error("No upcoming race found on the calendar.");
+    const circuit = META.circuits.find(c => c.toLowerCase() === r.raceName.toLowerCase());
+    if (!circuit) throw new Error(r.raceName + " isn't in the model's training data, so it can't be predicted automatically.");
+
+    const [q, st, w] = await Promise.allSettled([
+      jget(`/current/${r.round}/qualifying.json`),
+      +r.round > 1 ? jget(`/current/${+r.round - 1}/driverStandings.json`) : Promise.resolve(null),
+      weatherFor(r)
+    ]);
+    const qr = q.status === "fulfilled" ? (q.value.RaceTable.Races[0]?.QualifyingResults || []) : [];
+    const gridKnown = qr.length > 0;
+    const qpos = Object.fromEntries(qr.map(x => [x.Driver.code, +x.position]));
+    const sl = st.status === "fulfilled" && st.value ? (st.value.StandingsTable.StandingsLists[0]?.DriverStandings || []) : [];
+    const pts = Object.fromEntries(sl.map(x => [x.Driver.code, Math.round(+x.points)]));
+    const nats = Object.fromEntries(sl.map(x => [x.Driver.code, x.Driver.nationality]));
+    const country = ctry(r.Circuit.Location.country);
+
+    const wx = w.status === "fulfilled" && Number.isFinite(w.value.air) && Number.isFinite(w.value.track) ? w.value : null;
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)));
+
+    const entries = GRIDP.map(g => {
+      const pos = gridKnown && qpos[g.driver] ? qpos[g.driver] : g.position;
+      return {driver: g.driver, team: g.team, grid_position: pos, quali_position: pos,
+              standing_points: pts[g.driver] ?? g.points, home_race: NAT[nats[g.driver]] === country};
+    });
+    const res = await api("/simulate", {
+      circuit, rainfall: wx ? wx.rain >= 1 : false,
+      air_temp: wx ? clamp(wx.air, 0, 60) : 25, track_temp: wx ? clamp(wx.track, 0, 80) : 35, entries
+    });
+
+    const badge = gridKnown ? "" : `<p class="sub" style="color:#ffb400">Provisional: qualifying hasn't happened yet, so the grid follows championship standings.</p>`;
+    const wnote = wx ? `${Math.round(wx.air)}°C air, ${wx.rain >= 1 ? "rain likely" : "dry"}` : "weather unavailable, using defaults (25°C air, dry)";
+    box.innerHTML = `<h3>${esc(r.raceName)} · Round ${esc(r.round)} · ${esc(r.date)}</h3>${badge}
+      <p class="sub">Predicted winner: <b>${esc(res.predicted_winner || "none")}</b> · ${wnote}</p>
+      ${tower(res.results)}
+      <p class="sub">Each driver's win chance is estimated independently, so the values don't add up to 100%.</p>`;
+    box.style.display = "block";
+  } catch (err) {
+    box.innerHTML = `<p class="sub" style="color:var(--neg)">${esc(err.message || "Couldn't load the next race. If the server was asleep, wait a few seconds and try again.")}</p>`;
+    box.style.display = "block";
+    console.error(err);
+  } finally {
+    btn.disabled = false; btn.textContent = "Predict next race";
+  }
+}
+
+async function api(path, body) {
+  const r = await fetch(API + path, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : undefined);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Request failed (" + r.status + ")");
+  return j;
+}
+const opt = (a, sel) => (sel && !a.includes(sel) ? [sel, ...a] : a)
+  .map(x => `<option${x === sel ? " selected" : ""}>${esc(x)}</option>`).join("");
+const bars = (items, max) => {
+  max = max || Math.max(...items.map(i => Math.abs(i.v)), 1e-9);
+  return items.map(i => `<div class="bar"><span class="l">${esc(i.l)}</span><div class="t"><div class="f" style="width:${Math.max(1, Math.abs(i.v) / max * 100)}%;${i.c ? "background:" + i.c : ""}"></div></div><span class="v">${i.t}</span></div>`).join("");
+};
+const entry = (id, d = {}) => `<div class="grid">
+<div><label>Driver</label><select id="${id}-driver">${opt(META.drivers, d.driver || "VER")}</select></div>
+<div><label>Team</label><select id="${id}-team">${opt(META.teams, d.team || "Red Bull Racing")}</select></div>
+<div><label>Grid position</label><input id="${id}-grid" type="number" min="1" max="22" value="${d.grid || 1}"></div>
+<div><label>Qualifying position</label><input id="${id}-quali" type="number" min="1" max="22" value="${d.grid || 1}"></div>
+<div><label>Championship points</label><input id="${id}-pts" type="number" min="0" value="${d.pts ?? 100}"></div>
+<div><label>&nbsp;</label><label class="chk"><input id="${id}-home" type="checkbox"> Home race</label></div></div>`;
+const cond = id => `<div class="grid">
+<div><label>Circuit</label><select id="${id}-circuit">${opt(META.circuits)}</select></div>
+<div><label>Air temperature (°C)</label><input id="${id}-air" type="number" value="25"></div>
+<div><label>Track temperature (°C)</label><input id="${id}-track" type="number" value="35"></div>
+<div><label>&nbsp;</label><label class="chk"><input id="${id}-rain" type="checkbox"> Wet race</label></div></div>`;
+const getE = id => ({driver:$(`#${id}-driver`).value, team:$(`#${id}-team`).value, grid_position:+$(`#${id}-grid`).value, quali_position:+$(`#${id}-quali`).value, standing_points:+$(`#${id}-pts`).value, home_race:$(`#${id}-home`).checked});
+const getC = id => ({circuit:$(`#${id}-circuit`).value, rainfall:$(`#${id}-rain`).checked, air_temp:+$(`#${id}-air`).value, track_temp:+$(`#${id}-track`).value});
+const LIGHTS = `<div class="card lights"><div class="lamps"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i></div><p class="sub">Warming up the engine… the first request can take up to a minute.</p></div>`;
+$("#status").innerHTML = LIGHTS;
+
+let PROJ = [], projChart;
+function drawProj(){
+  const cv = document.getElementById("projchart");
+  if (!cv || !window.Chart || !PROJ.length) return;
+  if (projChart) projChart.destroy();
+  Chart.defaults.color = "#8b8b99";
+  Chart.defaults.font.family = "'Titillium Web', sans-serif";
+  projChart = new Chart(cv, {
+    type: "bar",
+    data: {
+      labels: PROJ.map(s => s.driver),
+      datasets: [
+        {label:"10th–90th percentile", data:PROJ.map(s => [s.p10, s.p90]), backgroundColor:"rgba(225,6,0,.35)", borderColor:"#e10600", borderWidth:1, borderRadius:4, grouped:false, barThickness:20, order:2},
+        {label:"Projected points", data:PROJ.map(s => [s.projected_mean - 2, s.projected_mean + 2]), backgroundColor:"#f5b800", borderRadius:2, grouped:false, barThickness:20, order:1}
+      ]
+    },
+    options: {
+      indexAxis: "y", maintainAspectRatio: false, animation: {duration: 900},
+      scales: {x:{grid:{color:"#2a2a35"}}, y:{grid:{display:false}}},
+      plugins: {legend:{labels:{usePointStyle:true}}}
+    }
+  });
+}
+
+const JOLPICA = "https://api.jolpi.ca/ergast/f1";
+const jget = async p => { const r = await fetch(JOLPICA + p); if (!r.ok) throw new Error("Jolpica " + r.status); return (await r.json()).MRData; };
+const NAT = {Dutch:"netherlands", British:"uk", Monegasque:"monaco", Spanish:"spain", Australian:"australia", Canadian:"canada", French:"france", German:"germany", Thai:"thailand", Japanese:"japan", Mexican:"mexico", Finnish:"finland", Danish:"denmark", Chinese:"china", Italian:"italy", Brazilian:"brazil", American:"usa", Argentine:"argentina", "New Zealander":"new zealand"};
+const ctry = s => { s = (s || "").toLowerCase(); return ["united kingdom","great britain","england"].includes(s) ? "uk" : ["united states","united states of america"].includes(s) ? "usa" : s; };
+let CAL = [], afSeq = 0;
+
+async function loadCalendar(){
+  const sel = $("#af-race");
+  try {
+    CAL = (await jget("/current.json")).RaceTable.Races;
+    const today = new Date().toISOString().slice(0, 10);
+    let next = CAL.findIndex(r => r.date >= today); if (next < 0) next = CAL.length - 1;
+    sel.innerHTML = CAL.map((r, i) => `<option value="${i}"${i === next ? " selected" : ""}>R${r.round} · ${esc(r.raceName)}${r.date >= today ? " (upcoming)" : ""}</option>`).join("");
+    if (GRIDP.length) autoFill();
+  } catch (e) { sel.innerHTML = "<option>Calendar unavailable</option>"; }
+}
+
+async function weatherFor(r){
+  const L = r.Circuit.Location;
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${L.lat}&longitude=${L.long}&hourly=temperature_2m,soil_temperature_0cm,precipitation&start_date=${r.date}&end_date=${r.date}&timezone=auto`);
+  if (!res.ok) throw new Error("weather");
+  const h = (await res.json()).hourly, win = [13, 14, 15, 16];
+  const avg = k => win.reduce((s, i) => s + h[k][i], 0) / win.length;
+  return {air: avg("temperature_2m"), track: avg("soil_temperature_0cm"), rain: win.reduce((s, i) => s + h.precipitation[i], 0)};
+}
+
+async function autoFill(){
+  const r = CAL[+$("#af-race").value], note = $("#af-note");
+  if (!r) return;
+  const my = ++afSeq, code = $("#p-driver").value, msgs = [], set = (id, v) => { $("#" + id).value = v; };
+  note.textContent = "Filling in…";
+  const circ = META.circuits.find(c => c.toLowerCase() === r.raceName.toLowerCase());
+  if (circ) set("pc-circuit", circ); else msgs.push(`${r.raceName} isn't in the model's training data, so pick the closest circuit by hand.`);
+  const g = GRIDP.find(x => x.driver === code);
+  if (g) setSel($("#p-team"), g.team);
+  const [q, st, w] = await Promise.allSettled([
+    jget(`/current/${r.round}/qualifying.json`),
+    +r.round > 1 ? jget(`/current/${+r.round - 1}/driverStandings.json`) : Promise.resolve(null),
+    weatherFor(r)
+  ]);
+  if (my !== afSeq) return;
+  const qr = q.status === "fulfilled" ? q.value.RaceTable.Races[0]?.QualifyingResults : null;
+  const me = qr && qr.find(x => x.Driver.code === code);
+  if (me) { set("p-quali", me.position); set("p-grid", me.position); msgs.push(`Qualifying: P${me.position} (the grid is assumed equal; penalties aren't applied).`); }
+  else msgs.push(qr ? `${code} has no qualifying result for this race.` : "Qualifying hasn't happened yet, so grid and qualifying are unchanged. Set them by hand or come back after qualifying.");
+  if (st.status === "fulfilled") {
+    const list = st.value ? st.value.StandingsTable.StandingsLists[0]?.DriverStandings || [] : [];
+    const d = list.find(x => x.Driver.code === code);
+    set("p-pts", d ? Math.round(+d.points) : 0);
+    const nat = (d || me)?.Driver.nationality;
+    if (nat) $("#p-home").checked = NAT[nat] === ctry(r.Circuit.Location.country);
+  }
+  if (w.status === "fulfilled" && Number.isFinite(w.value.air) && Number.isFinite(w.value.track)) {
+    const v = w.value; set("pc-air", Math.round(v.air)); set("pc-track", Math.round(v.track)); $("#pc-rain").checked = v.rain >= 1;
+    msgs.push(`Weather: ${Math.round(v.air)}°C air, ${Math.round(v.track)}°C surface, ${v.rain >= 1 ? "rain likely" : "dry"}.`);
+  } else msgs.push("Weather unavailable for that date, so temperatures are unchanged.");
+  note.textContent = msgs.join(" ");
+  syncWhatIf();
+}
+document.addEventListener("change", e => { if (e.target.id === "af-race" || e.target.id === "p-driver") autoFill(); });
+
+async function loadBacktest(){
+  const box = $("#back");
+  try {
+    const res = await fetch("backtest.json");
+    if (!res.ok) throw new Error("missing");
+    const d = await res.json(), s = d.summary;
+    const p = x => (x * 100).toFixed(1) + "%";
+    const strip = k => `<div class="strip">${d.races.map(r => `<i class="${r[k] ? "h" : ""}" title="${esc(r.race)}"></i>`).join("")}</div>`;
+    const mark = ok => ok ? '<span class="ok">✔</span>' : '<span class="err">✘</span>';
+    const rows = d.races.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.race)}</td><td>${esc(r.model_pick)}</td><td>${esc(r.winner)} <small style="color:var(--mut)">#${r.winner_rank}</small></td><td>${esc(r.pole)}</td><td>${mark(r.model_ok)}</td><td>${mark(r.pole_ok)}</td></tr>`).join("");
+    const lose = s.model_hits < s.pole_hits ? " On this season the model did not beat simply picking the pole sitter." : "";
+    box.innerHTML = `<div class="card"><h2>${d.season} backtest</h2>
+      <p class="sub">The model was trained on 2019–${d.season - 1} only, then asked to pick the winner of every ${d.season} race it had never seen.</p>
+      <div class="bt">
+        <div><b>${s.model_hits}/${s.races}</b><span>Model picked the winner (${p(s.model_hits / s.races)})</span></div>
+        <div><b>${s.pole_hits}/${s.races}</b><span>Pole sitter won (${p(s.pole_hits / s.races)})</span></div>
+        <div><b>${s.top3_hits}/${s.races}</b><span>Winner in the model's top 3</span></div>
+      </div>
+      <p class="sub" style="margin:0">Model, race by race (green = correct)</p>${strip("model_ok")}
+      <p class="sub" style="margin:12px 0 0">Pole sitter, race by race</p>${strip("pole_ok")}</div>
+    <div class="card"><h2>Race by race</h2><div class="scroll"><table>
+      <tr><th>#</th><th>Race</th><th>Model pick</th><th>Winner (model rank)</th><th>Pole</th><th>Model</th><th>Pole</th></tr>${rows}</table></div>
+      <p class="sub">With only ${s.races} races, one race moves a hit rate by about ${(100 / s.races).toFixed(0)} percentage points.${lose} Win probabilities are per driver and not calibrated across the grid, so the ranking is more reliable than the exact percentages.</p></div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="card"><p class="err">Backtest data not found. Run training/backtest_data.py to generate frontend/backtest.json.</p></div>`;
+  }
+}
+
+function countUp(el){
+  const m = el.textContent.match(/[\d.]+/); if(!m) return;
+  const end = parseFloat(m[0]), t0 = performance.now(), dur = 900;
+  const step = now => {
+    const p = Math.min((now - t0) / dur, 1);
+    el.textContent = (end * (1 - Math.pow(1 - p, 3))).toFixed(1) + "%";
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function afterRender(out){
+  drawProj();
+  const big = out.querySelector(".big");
+  if (!big) return;
+  countUp(big);
+  if (out.querySelector(".ok") && window.confetti)
+    confetti({particleCount:120, spread:70, origin:{y:.35}, colors:["#e10600","#f5b800","#ffffff"]});
+}
+function heroCounters(){
+  document.querySelectorAll(".stat b").forEach(el => {
+    const end = +el.dataset.n, t0 = performance.now(), dur = 1400;
+    const step = now => {
+      const p = Math.min((now - t0) / dur, 1);
+      el.textContent = Math.round(end * (1 - Math.pow(1 - p, 3))).toLocaleString("en-US");
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+let ORIG = [], PTS = {};
+function flashRows(){
+  const r = document.querySelector("#gridrows .rows");
+  if (!r) return;
+  r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".mini");
+  if (!b || !GRID.length) return;
+  const cur = GRID.map((g, i) => { const d = $("#sd" + i).value; return {driver: d, team: $("#st" + i).value, points: PTS[d] ?? g.points}; });
+  let next;
+  if (b.dataset.act === "reverse") next = [...cur].reverse();
+  else if (b.dataset.act === "shuffle") {
+    next = [...cur];
+    for (let i = next.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [next[i], next[j]] = [next[j], next[i]]; }
+  } else next = ORIG.map(g => ({driver: g.driver, team: g.team, points: g.points}));
+  next.forEach((x, i) => {
+    GRID[i].driver = x.driver; GRID[i].team = x.team; GRID[i].points = x.points;
+    setSel($("#sd" + i), x.driver); setSel($("#st" + i), x.team);
+  });
+  flashRows();
+});
+
+let nowChart;
+function drawNow(){
+  const cv = document.getElementById("nowchart");
+  if (!cv || !window.Chart || !GRIDP.length) return;
+  const rows = [...GRIDP].sort((a, b) => b.points - a.points);
+  if (nowChart) nowChart.destroy();
+  Chart.defaults.color = "#8b8b99";
+  Chart.defaults.font.family = "'Titillium Web', sans-serif";
+  nowChart = new Chart(cv, {
+    type: "bar",
+    data: {labels: rows.map(x => x.driver), datasets: [{data: rows.map(x => x.points), backgroundColor: rows.map(x => teamColor(x.team)), borderRadius: 4}]},
+    options: {indexAxis: "y", maintainAspectRatio: false, animation: {duration: 900},
+      plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => c.raw + " pts"}}},
+      scales: {x: {grid: {color: "#2a2a35"}}, y: {grid: {display: false}}}}
+  });
+}
+
+let GRIDP = [];
+async function loadStartGrid(){
+  const box = $("#pgrid");
+  try {
+    GRIDP = await api("/grid/2026");
+    box.innerHTML = `<div class="card"><h2>2026 starting grid</h2><p class="sub">Click a driver to load them into the form above.</p><div class="sgrid">` +
+      GRIDP.map((x, i) => `<button class="tile" data-i="${i}" style="--team:${teamColor(x.team)};--d:${i * 30}ms"><span class="tp">P${x.position}</span><span class="tc">${esc(x.driver)}</span><span class="tt">${esc(x.team)}</span></button>`).join("") +
+      `</div></div>`;
+      drawNow();
+    if (CAL.length) autoFill();
+  } catch (e) { box.innerHTML = ""; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".tile");
+  if (!b) return;
+  const x = GRIDP[+b.dataset.i];
+  setSel($("#p-driver"), x.driver); setSel($("#p-team"), x.team);
+  $("#p-grid").value = x.position; $("#p-quali").value = x.position; $("#p-pts").value = x.points;
+  autofill();
+  syncWhatIf();
+  window.scrollTo({top: 0, behavior: "smooth"});
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest(".rv");
+  if (!b || !GRIDP.length) return;
+  const fill = (id, code) => {
+    const x = GRIDP.find(g => g.driver === code);
+    if (!x) return;
+    $(`#${id}-driver`).value = x.driver; $(`#${id}-team`).value = x.team;
+    $(`#${id}-grid`).value = x.position; $(`#${id}-quali`).value = x.position; $(`#${id}-pts`).value = x.points;
+  };
+  fill("a", b.dataset.a); fill("b", b.dataset.b);
+  $("#hgo").click();
+});
+
+let wiTimer, wiSeq = 0;
+const WI = [["wi-grid","p-grid"],["wi-quali","p-quali"],["wi-air","pc-air"],["wi-track","pc-track"]];
+function syncWhatIf(){
+  if (!$("#wi-grid")) return;
+  WI.forEach(([s, f]) => { $("#" + s).value = $("#" + f).value; $("#" + s + "-v").textContent = $("#" + f).value; });
+  $("#wi-rain").checked = $("#pc-rain").checked;
+  $("#whatif").style.setProperty("--team", teamColor($("#p-team").value));
+  $("#wi-who").textContent = $("#p-driver").value + " · " + $("#p-team").value;
+  clearTimeout(wiTimer); wiTimer = setTimeout(runWhatIf, 250);
+}
+async function runWhatIf(){
+  const my = ++wiSeq, card = $("#whatif");
+  card.classList.add("busy");
+  try {
+    const r = await api("/explain", {...getE("p"), ...getC("pc")});
+    if (my !== wiSeq) return;
+    $("#wi-arc").style.strokeDashoffset = (282.74 * (1 - r.win_probability)).toFixed(2);
+    $("#wi-num").textContent = pct(r.win_probability);
+  } catch (e) { if (my === wiSeq) $("#wi-num").textContent = "n/a"; }
+  if (my === wiSeq) card.classList.remove("busy");
+}
+document.addEventListener("input", e => {
+  const s = e.target.closest(".wsl");
+  if (!s) return;
+  $("#" + WI.find(([id]) => id === s.id)[1]).value = s.value;
+  $("#" + s.id + "-v").textContent = s.value;
+  clearTimeout(wiTimer); wiTimer = setTimeout(runWhatIf, 250);
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "wi-rain") {
+    $("#pc-rain").checked = e.target.checked;
+    clearTimeout(wiTimer); wiTimer = setTimeout(runWhatIf, 250);
+  } else if (e.target.closest("#predict") && !e.target.closest("#whatif")) syncWhatIf();
+});
+
+
+const TEAM_COLORS = {"red bull":"#3671C6", ferrari:"#E8002D", mercedes:"#27F4D2", mclaren:"#FF8000", "aston martin":"#229971", alpine:"#FF87BC", williams:"#64C4FF", "racing bulls":"#6692FF", haas:"#B6BABD", audi:"#F50537", sauber:"#52E252", cadillac:"#C0C0C0"};
+const teamColor = t => TEAM_COLORS[Object.keys(TEAM_COLORS).find(k => (t || "").toLowerCase().includes(k))] || "#888";
+
+function gauge(p){
+  p = Math.max(0, Math.min(1, p || 0));
+  return `<svg class="gauge" viewBox="0 0 200 118" aria-hidden="true"><path class="gbg" d="M10 100A90 90 0 0 1 190 100"/><path class="gfg" d="M10 100A90 90 0 0 1 190 100" style="stroke-dashoffset:${(282.74 * (1 - p)).toFixed(2)}"/><text x="10" y="114" text-anchor="middle">0</text><text x="190" y="114" text-anchor="middle">100</text><text x="100" y="92" text-anchor="middle">WIN CHANCE</text></svg>`;
+}
+
+function setSel(el, v){
+  if (![...el.options].some(o => o.value === v)) el.add(new Option(v, v));
+  el.value = v;
+}
+
+function tower(results) {
+  const rows = [...results].sort((a, b) => (b.win_probability || 0) - (a.win_probability || 0));
+  const max = Math.max(...rows.map(x => x.win_probability || 0), 0.01);
+  return `<div class="tower">` + rows.map((x, i) => `
+    <div class="trow ${i === 0 && x.supported ? "lead" : ""}" style="--team:${teamColor(x.team)};--d:${i * 40}ms">
+      <span class="tpos">${i + 1}</span><span class="tstripe"></span>
+      <span class="tcode">${esc(x.driver)}</span><span class="tteam">${esc(x.team)}</span>
+      <span class="tbar"><i style="width:${(x.win_probability || 0) / max * 100}%"></i></span>
+      <span class="tpct">${x.supported ? pct(x.win_probability) : "no data"}</span>
+    </div>`).join("") + `</div>`;
+}
+
+async function run(btn, out, fn) {
+  const t = btn.textContent;
+  btn.disabled = true; btn.textContent = "Running…"; out.innerHTML = LIGHTS;
+  
+  try { out.innerHTML = await fn(); afterRender(out); }
+  catch (e) { out.innerHTML = `<div class="card"><p class="err">${esc(e.message)}</p></div>`; }
+  btn.disabled = false; btn.textContent = t;
+}
+
+async function loadGrid() {
+  GRID = await api("/grid/" + $("#ss").value);
+  ORIG = GRID.map(g => ({...g})); PTS = Object.fromEntries(ORIG.map(g => [g.driver, g.points]));
+  $("#gridrows").innerHTML = `<div class="rows">` + GRID.map((g, i) =>
+    `<div class="row"><b>P${g.position}</b><select id="sd${i}" aria-label="Driver P${g.position}">${opt(META.drivers, g.driver)}</select><select id="st${i}" aria-label="Team P${g.position}">${opt(META.teams, g.team)}</select></div>`).join("") + `</div>`;
+}
+
+function build() {
+  // Prediction + explanation
+  $("#predict").innerHTML = `<div class="card"><h2>Race settings</h2>${entry("p")}<div style="height:12px"></div>${cond("pc")}<button class="go" id="pgo">Predict winner</button></div><div id="pout"></div>`;
+  $("#predict").insertAdjacentHTML("afterbegin", `<div class="card"><h2>Auto-fill from a real race</h2><p class="sub">Pick a race and a driver. Team, qualifying, points, home race and weather are filled in for you.</p><div class="grid"><div><label for="af-race">Race</label><select id="af-race"><option>Loading calendar…</option></select></div></div><p class="sub" id="af-note" style="margin:10px 0 0"></p></div>`);
+loadCalendar();
+  $("#predict").insertAdjacentHTML("beforeend", `<div id="pgrid"></div>`);
+  $("#pgrid").insertAdjacentHTML("beforebegin", `<div class="card" id="nextrace">
+  <h2>Next race</h2>
+  <p class="sub">Predicts the winner of the upcoming Grand Prix for the whole grid, filled in automatically.</p>
+  <button class="go" id="nextRaceBtn">Predict next race</button>
+  <div id="nextRaceResult" style="display:none; margin-top:16px;"></div>
+</div>`);
+  $("#nextRaceBtn").addEventListener("click", loadNextRace);
+  $("#pgrid").insertAdjacentHTML("beforebegin", `<div class="card" id="whatif">
+  <h2>What-if explorer</h2>
+  <p class="sub">Drag a slider and watch the win chance change. <b id="wi-who"></b></p>
+  <div class="wi">
+    <div class="wig"><svg viewBox="0 0 200 110" aria-hidden="true"><path class="gbg" d="M10 100A90 90 0 0 1 190 100"/><path class="gfg" id="wi-arc" d="M10 100A90 90 0 0 1 190 100"/></svg><div class="dpct" id="wi-num">…</div></div>
+    <div>
+      ${[["wi-grid","Grid position",1,22],["wi-quali","Qualifying position",1,22],["wi-air","Air temp (°C)",5,45],["wi-track","Track temp (°C)",10,60]].map(([id, l, mn, mx]) => `<div class="wrow"><label for="${id}">${l}</label><input class="wsl" type="range" id="${id}" min="${mn}" max="${mx}" value="${mn}"><b id="${id}-v">${mn}</b></div>`).join("")}
+      <label class="chk"><input type="checkbox" id="wi-rain"> Wet race</label>
+    </div>
+  </div>
+</div>`);
+syncWhatIf();
+loadStartGrid();
+  $("#pgo").onclick = e => run(e.target, $("#pout"), async () => {
+    const body = {...getE("p"), ...getC("pc")};
+    const r = await api("/explain", body);
+    const c = Object.entries(r.contributions).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+    const proxy = body.team === "Cadillac" ? `<p class="sub">Cadillac has no race history, so a midfield team stands in for it.</p>` : "";
+    return `<div class="card dcard" style="--team:${teamColor(body.team)}">
+  ${gauge(r.win_probability)}
+  <div class="dhead"><span class="dcode">${esc(r.driver)}</span><span class="dteam">${esc(body.team)}</span></div>
+  <div class="chips"><span>Grid P${body.grid_position}</span><span>Quali P${body.quali_position}</span><span>${body.standing_points} pts</span>${body.rainfall ? "<span>Wet race</span>" : ""}${body.home_race ? "<span>Home race</span>" : ""}</div>
+  <div class="big">${pct(r.win_probability)}</div><p>${esc(r.driver)} is ${r.predicted_win ? "<b class='ok'>predicted to win</b>" : "<b>not predicted to win</b>"}.</p>${proxy}</div>
+    <div class="card"><h2>What drove this prediction</h2>${bars(c.map(([k, v]) => ({l:k, v, t:(v > 0 ? "+" : "") + v.toFixed(2), c:v > 0 ? "var(--pos)" : "var(--neg)"})))}<p class="sub">Green pushes toward a win, red pushes against (SHAP values).</p></div>`;
+  });
+
+  // Head-to-head
+  
+  $("#h2h").innerHTML = `<div class="card"><div class="cols"><div><h2>Driver A</h2>${entry("a")}</div><div><h2>Driver B</h2>${entry("b", {driver:"NOR", team:"McLaren", grid:2})}</div></div><div style="height:12px"></div>${cond("hc")}<button class="go" id="hgo">Compare drivers</button></div><div id="hout"></div>`;
+  $("#h2h").insertAdjacentHTML("beforeend", `<div class="card"><h2>Classic rivalries</h2><p class="sub">One click loads both drivers from the 2026 grid and runs the comparison.</p><div class="rivals">` +
+  [["VER","NOR"],["HAM","LEC"],["RUS","ANT"],["NOR","PIA"],["HAM","RUS"],["VER","HAD"]]
+    .map(([a, b]) => `<button class="rv" data-a="${a}" data-b="${b}">${a}<i>VS</i>${b}</button>`).join("") +
+  `</div></div>`);
+  $("#hgo").onclick = e => run(e.target, $("#hout"), async () => {
+    const A = getE("a"), B = getE("b");
+    const r = await api("/compare", {...getC("hc"), a:A, b:B});
+    const pa = r.a.win_probability || 0, pb = r.b.win_probability || 0;
+    const share = pa + pb ? pa / (pa + pb) * 100 : 50;
+    const ca = teamColor(A.team), cb = teamColor(B.team) === ca ? "#ffffff" : teamColor(B.team);
+    const side = (x, y, c) => `
+    <div class="card dcard ${y.driver === r.favourite ? "fav" : ""}" style="--team:${c}">
+    <div class="dhead"><span class="dcode">${esc(y.driver)}</span><span class="dteam">${esc(x.team)}</span></div>
+    <div class="chips"><span>Grid P${x.grid_position}</span><span>Quali P${x.quali_position}</span><span>${x.standing_points} pts</span></div>
+    <div class="dpct">${pct(y.win_probability)}</div><div class="sub" style="margin:2px 0 0">chance to win the race</div>
+    </div>`;
+    return `<div class="h2h">${side(A, r.a, ca)}${side(B, r.b, cb)}</div>
+    <div class="card" style="margin-top:14px"><h2>The model favours ${esc(r.favourite)}</h2>
+    <div class="tug" style="--ta:${ca};--tb:${cb}"><i style="width:${share}%"></i></div>
+    <div class="tugl"><span style="color:${ca}">${esc(r.a.driver)} ${share.toFixed(0)}%</span><span style="color:${cb}">${(100 - share).toFixed(0)}% ${esc(r.b.driver)}</span></div>
+    <p class="sub">Cards: each driver's own chance to win the race against the whole field, so the two don't sum to 100%. Bar: how those two numbers compare head-to-head.</p>
+    </div>`;
+  });
+
+  // Race simulator
+  $("#sim").innerHTML = `<div class="card"><h2>Full-grid simulator</h2><div class="grid"><div><label>Starting grid</label><select id="ss"><option>2026</option><option>2023</option></select></div></div><div style="height:12px"></div>${cond("sc")}<div id="gridrows"></div><button class="go" id="sgo">Simulate race</button></div><div id="sout"></div>`;
+  $("#gridrows").insertAdjacentHTML("beforebegin", `<div class="toolbar"><button class="mini" data-act="reverse">Reverse grid</button><button class="mini" data-act="shuffle">Shuffle</button><button class="mini" data-act="reset">Reset</button></div>`);
+  $("#ss").onchange = loadGrid;
+  $("#sgo").onclick = e => run(e.target, $("#sout"), async () => {
+    const entries = GRID.map((g, i) => ({driver:$("#sd" + i).value, team:$("#st" + i).value, grid_position:g.position, quali_position:g.position, standing_points:g.points, home_race:false}));
+    const r = await api("/simulate", {...getC("sc"), entries});
+    const items = r.results.map((x, i) => ({l:x.driver, v:x.win_probability || 0, t:x.supported ? pct(x.win_probability) : "no data", c: i === 0 && x.supported ? "var(--win)" : ""}));
+    const prox = r.results.some(x => x.team === "Cadillac") ? `<p class="sub">Cadillac drivers use a midfield proxy because the team has no race history.</p>` : "";
+    return `<div class="card"><h2>Predicted winner: ${esc(r.predicted_winner || "none")}</h2>${tower(r.results)}<p class="sub">Each driver's win chance is estimated independently, so the values don't add up to 100%.</p>${prox}</div>`;
+  });
+
+  // Season projection
+  $("#proj").innerHTML = `<div class="card"><h2>2026 season projection</h2><p class="sub">Monte Carlo simulation of the remaining races. Ctrl/Cmd-click to select several.</p><div class="grid" style="margin-top:12px"><div style="grid-column:1/-1"><label>Remaining races</label><select id="pr" multiple size="8">${opt(META.circuits)}</select></div><div><label>Simulations</label><select id="pn"><option>500</option><option>1000</option><option>2000</option><option>3000</option></select></div></div><button class="go" id="prgo">Run projection</button></div><div id="prout"></div>`;
+  $("#proj").insertAdjacentHTML("beforeend", `<div class="card"><h2>Championship standings now</h2><p class="sub">Current points for the 2026 grid. Select the remaining races above and run the projection to see where each driver is likely to finish.</p><div class="chartbox tall"><canvas id="nowchart"></canvas></div></div>`);
+  $("#prgo").onclick = e => run(e.target, $("#prout"), async () => {
+    const races = [...$("#pr").selectedOptions].map(o => o.value);
+    if (!races.length) throw new Error("Select at least one remaining race.");
+    const r = await api("/season-projection", {remaining_races:races, n_sims:+$("#pn").value});
+    PROJ = r.standings.slice(0, 10);
+    const top = r.standings.slice(0, 10).map(s => ({l:s.driver, v:s.projected_mean, t:s.projected_mean}));
+    return `<div class="card"><h2>Projected final points (top 10)</h2><div class="chartbox"><canvas id="projchart"></canvas></div><p class="sub">Gold = projected points. Red band = 10th to 90th percentile across simulations.</p></div>
+    <div class="card"><h2>Projected standings</h2><div class="scroll"><table><tr><th>#</th><th>Driver</th><th>Now</th><th>Projected</th><th>10th–90th pct</th><th>Title chance</th></tr>${r.standings.map((s, i) => `<tr><td>${i + 1}</td><td>${esc(s.driver)}</td><td>${s.current_points}</td><td>${s.projected_mean}</td><td>${s.p10}–${s.p90}</td><td>${s.title_win_pct}%</td></tr>`).join("")}</table></div>${r.skipped_races.length ? `<p class="sub">Skipped unknown races: ${esc(r.skipped_races.join(", "))}</p>` : ""}</div>`;
+  });
+}
+
+heroCounters();
+
+$("#nav").onclick = e => {
+  const t = e.target.dataset.t; if (!t) return;
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b === e.target));
+  document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== t);
+};
+
+(async function init() {
+  const st = $("#status"), t0 = performance.now();
+  for (let i = 0; i < 12 && !META; i++) {
+    try { META = await api("/meta"); }
+    catch (e) {
+      const msg = st.querySelector(".lights .sub");
+      if (msg) msg.textContent = "Waking the server. The free tier can take up to a minute.";
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+  if (!META) { st.textContent = "Could not reach the API. Check the API address at the top of the script."; return; }
+  await new Promise(r => setTimeout(r, Math.max(0, 3200 - (performance.now() - t0))));
+  const lights = st.querySelector(".lights");
+  if (lights) lights.classList.add("out");
+  await new Promise(r => setTimeout(r, 600));
+  st.remove(); build(); loadBacktest(); await loadGrid();
+})();
+</script>
+</body>
+</html>
