@@ -1,0 +1,13 @@
+{
+  "model": "Logistic regression on grid, qualifying, recent form and team form",
+  "n_samples": 3035,
+  "n_races": 152,
+  "seasons": "2019-2025",
+  "test_seasons": "2022-2025 (each trained only on earlier seasons)",
+  "held_out_winner_accuracy": 58.7,
+  "pole_baseline_accuracy": 55.4,
+  "held_out_race_logloss": 1.129,
+  "held_out_brier": 0.027,
+  "held_out_races": 92,
+  "note": "Evaluated per race on seasons the model had not seen. Small sample (about 90 races)."
+}
