@@ -78,8 +78,8 @@ Interactive docs are at `/docs` on the API.
 ## Run it locally
 
 ```bash
-git clone <repo-url>
-cd <repo-folder>
+git clone https://github.com/Milind2805/ApexPredict.git
+cd ApexPredict
 
 # Backend
 cd backend
