@@ -1,15 +1,11 @@
 """Model + data layer for the F1 Race Winner Predictor (no Streamlit)."""
 import json
 from pathlib import Path
-
-from matplotlib.pyplot import grid
 import numpy as np
 import pandas as pd
 import time
 import copy
 import requests
-from streamlit import cache
-from xgboost import tracker
 from features import FEATURES, LinearModel, build_frame, feature_row, load_history
 
 STANDINGS_URL = "https://api.jolpi.ca/ergast/f1/current/driverStandings.json"
