@@ -3,7 +3,7 @@
 A web app that estimates each driver's chance of winning the next Formula 1 Grand Prix, explains the estimate, and lets you test "what if" scenarios. The model is a logistic regression trained on 2019–2025 races and kept current with live 2026 results.
 
 **Live app:** https://f1-race-winner-predictor-app-fronte.vercel.app
-**API:** https://f1-race-winner-predictor-app.onrender.com/docs  *(free tier, the first request can take about 30 seconds to wake the server)*
+**API:** https://f1-race-winner-predictor-app.onrender.com/docs  *(free tier, the first request can take about a minute to wake the server)*
 
 ---
 
